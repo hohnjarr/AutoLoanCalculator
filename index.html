@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Car Loan Calculator</title>
+
+  <!-- iOS install feel -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+
+  <!-- PWA manifest -->
+  <link rel="manifest" href="manifest.json" />
+
+  <style>
+    :root { --bg:#0b0f14; --card:#121822; --text:#e7eef7; --muted:#9fb3c8; --accent:#3ea6ff; --ok:#29c27f; }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui, -apple-system, Segoe UI, Roboto}
+    .wrap{max-width:720px;margin:0 auto;padding:24px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+    h1{font-size:20px;margin:0}
+    .card{background:var(--card);border-radius:16px;padding:16px;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px}
+    @media (min-width:700px){ .grid{grid-template-columns:repeat(2,1fr)} }
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    input,select,button{width:100%;padding:12px 14px;border-radius:12px;border:1px solid #233044;background:#0d141d;color:var(--text)}
+    input:focus,select:focus{outline:2px solid var(--accent);border-color:transparent}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .results{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:12px}
+    .pill{background:#0e1b27;border:1px solid #1f2e40;border-radius:12px;padding:12px}
+    .pill h3{font-size:12px;color:var(--muted);margin:0 0 6px}
+    .big{font-size:20px;font-weight:700}
+    .ok{color:var(--ok)}
+    details{margin-top:12px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{padding:8px;border-bottom:1px solid #1e2a38;text-align:right}
+    th:first-child,td:first-child{text-align:left}
+    tfoot td{font-weight:700}
+    .footer{opacity:.7;font-size:12px;margin-top:16px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Car Loan Calculator</h1>
+      <button id="installBtn" hidden>Install</button>
+    </header>
+
+    <div class="card">
+      <div class="grid">
+        <div>
+          <label>Vehicle Price</label>
+          <input id="price" type="number" step="0.01" inputmode="decimal" placeholder="30000" value="30000" />
+        </div>
+        <div>
+          <label>Down Payment</label>
+          <input id="down" type="number" step="0.01" inputmode="decimal" placeholder="3000" value="3000" />
+        </div>
+        <div>
+          <label>Trade-in Value</label>
+          <input id="trade" type="number" step="0.01" inputmode="decimal" placeholder="0" value="0" />
+        </div>
+        <div>
+          <label>Taxes (%)</label>
+          <input id="tax" type="number" step="0.01" inputmode="decimal" placeholder="7" value="7" />
+        </div>
+        <div>
+          <label>Fees (Title/Doc/etc.)</label>
+          <input id="fees" type="number" step="0.01" inputmode="decimal" placeholder="400" value="400" />
+        </div>
+        <div>
+          <label>APR (%)</label>
+          <input id="apr" type="number" step="0.001" inputmode="decimal" placeholder="5.49" value="5.49" />
+        </div>
+        <div>
+          <label>Term (months)</label>
+          <input id="months" type="number" inputmode="numeric" placeholder="60" value="60" />
+        </div>
+        <div>
+          <label>Extra Monthly Payment (optional)</label>
+          <input id="extra" type="number" step="0.01" inputmode="decimal" placeholder="0" value="0" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <button id="calc">Calculate</button>
+        <button id="reset" type="button">Reset</button>
+      </div>
+
+      <div class="results">
+        <div class="pill">
+          <h3>Monthly Payment</h3>
+          <div class="big" id="monthly">$0.00</div>
+        </div>
+        <div class="pill">
+          <h3>Loan Amount</h3>
+          <div class="big" id="loan">$0.00</div>
+        </div>
+        <div class="pill">
+          <h3>Total Interest</h3>
+          <div class="big" id="interest">$0.00</div>
+        </div>
+        <div class="pill">
+          <h3>Total Cost</h3>
+          <div class="big ok" id="total">$0.00</div>
+        </div>
+      </div>
+
+      <details>
+        <summary>Show amortization schedule</summary>
+        <div style="overflow:auto; max-height:45vh; margin-top:8px;">
+          <table id="table">
+            <thead>
+              <tr><th>#</th><th>Payment</th><th>Interest</th><th>Principal</th><th>Balance</th></tr>
+            </thead>
+            <tbody></tbody>
+            <tfoot>
+              <tr><td>Total</td><td id="tPay">—</td><td id="tInt">—</td><td id="tPrin">—</td><td>—</td></tr>
+            </tfoot>
+          </table>
+        </div>
+      </details>
+
+      <div class="footer">Tip: On iPhone, open in Safari → Share → <b>Add to Home Screen</b> to install.</div>
+    </div>
+  </div>
+
+  <script>
+    // Register service worker for offline
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+    }
+
+    // Android/desktop install prompt (iOS uses Add to Home Screen)
+    let deferredPrompt;
+    const installBtn = document.getElementById('installBtn');
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installBtn.hidden = false;
+    });
+    installBtn?.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      installBtn.hidden = true;
+    });
+
+    const $ = (id)=>document.getElementById(id);
+    const fmt = (n)=> n.toLocaleString(undefined,{style:'currency',currency:'USD'});
+
+    function calcSchedule() {
+      const price = +$('price').value || 0;
+      const down  = +$('down').value  || 0;
+      const trade = +$('trade').value || 0;
+      const taxP  = (+$('tax').value || 0)/100;
+      const fees  = +$('fees').value || 0;
+      const apr   = (+$('apr').value || 0)/100;
+      const n     = Math.max(1, Math.floor(+$('months').value || 1));
+      const extra = +$('extra').value || 0;
+
+      const taxableBase = Math.max(0, price - down - trade);
+      const taxes = taxableBase * taxP;
+      const loanAmount = Math.max(0, taxableBase + taxes + fees);
+
+      const r = apr/12;
+      const basePayment = r === 0 ? (loanAmount / n) : (loanAmount * r) / (1 - Math.pow(1 + r, -n));
+      const payment = basePayment + extra;
+
+      let balance = loanAmount;
+      let totalInt = 0;
+      let totalPay = 0;
+      const rows = [];
+      let i = 0;
+      while (balance > 0 && i < 600) { // hard cap 50 years
+        i++;
+        const interest = r * balance;
+        let principal = payment - interest;
+        if (principal <= 0) { // APR too high vs payment
+          principal = 0;
+        }
+        if (principal > balance) { // final payment shrink
+          principal = balance;
+        }
+        const pay = principal + interest;
+        balance = Math.max(0, balance - principal);
+        totalInt += interest;
+        totalPay += pay;
+        rows.push({i, pay, interest, principal, balance});
+        if (balance <= 0.01) { balance = 0; break; }
+      }
+
+      $('loan').textContent = fmt(loanAmount);
+      $('monthly').textContent = fmt(basePayment); // monthly excl. extra (industry standard)
+      $('interest').textContent = fmt(totalInt);
+      $('total').textContent = fmt(totalPay);
+
+      // Render table
+      const tbody = $('table').querySelector('tbody');
+      tbody.innerHTML = rows.map(r =>
+        `<tr><td>${r.i}</td><td>${fmt(r.pay)}</td><td>${fmt(r.interest)}</td><td>${fmt(r.principal)}</td><td>${fmt(r.balance)}</td></tr>`
+      ).join('');
+      $('tPay').textContent  = fmt(totalPay);
+      $('tInt').textContent  = fmt(totalInt);
+      $('tPrin').textContent = fmt(loanAmount);
+    }
+
+    $('calc').addEventListener('click', calcSchedule);
+    document.querySelectorAll('input,select').forEach(el => el.addEventListener('change', calcSchedule));
+    $('reset').addEventListener('click', () => { document.querySelectorAll('input').forEach(i=>i.value=i.defaultValue); calcSchedule(); });
+    // first paint
+    calcSchedule();
+  </script>
+</body>
+</html>
